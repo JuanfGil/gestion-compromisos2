@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Compromisos</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
+
+    <style>
+        .estado-activo {
+            color: white;
+            background-color: green;
+            padding: 5px;
+            border-radius: 5px;
+        }
+
+        .estado-pendiente {
+            color: black;
+            background-color: yellow;
+            padding: 5px;
+            border-radius: 5px;
+        }
+
+        .estado-vencido {
+            color: white;
+            background-color: red;
+            padding: 5px;
+            border-radius: 5px;
+        }
+
+        .estado-cumplido {
+            color: white;
+            background-color: blue;
+            padding: 5px;
+            border-radius: 5px;
+        }
+
+        table {
+            font-size: 14px;
+        }
+
+        textarea {
+            resize: vertical;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center">Gestión de Compromisos</h1>
+
+        <form id="commitmentForm" class="mt-4">
+            <div class="mb-3">
+                <label for="leaderName" class="form-label">Nombre del Líder</label>
+                <input type="text" id="leaderName" class="form-control" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="leaderPhone" class="form-label">Teléfono del Líder</label>
+                <input type="text" id="leaderPhone" class="form-control" pattern="\d+" required>
+                <div class="form-text">Ingrese solo números.</div>
+            </div>
+
+            <div class="mb-3">
+                <label for="municipality" class="form-label">Municipio</label>
+                <input type="text" id="municipality" class="form-control" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="commitment" class="form-label">Compromiso</label>
+                <textarea id="commitment" class="form-control" rows="3" required></textarea>
+            </div>
+
+            <div class="mb-3">
+                <label for="responsible" class="form-label">Responsable</label>
+                <input type="text" id="responsible" class="form-control" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="responsibleEmail" class="form-label">Correo del Responsable</label>
+                <input type="email" id="responsibleEmail" class="form-control" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="observation" class="form-label">Observaciones</label>
+                <textarea id="observation" class="form-control" rows="3"></textarea>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Guardar Compromiso</button>
+        </form>
+
+        <h2 class="mt-5">Lista de Compromisos</h2>
+
+        <button id="normalViewButton" class="btn btn-outline-primary mb-3">Mis Compromisos</button>
+        <button id="adminViewButton" class="btn btn-secondary mb-3">Vista de Administrador</button>
+        <button id="exportButton" class="btn btn-success mb-3">Exportar a Excel</button>
+
+        <div class="table-responsive">
+            <table class="table table-bordered mt-3">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Nombre del Líder</th>
+                        <th>Teléfono del Líder</th>
+                        <th>Municipio</th>
+                        <th>Compromiso</th>
+                        <th>Responsable</th>
+                        <th>Correo Responsable</th>
+                        <th>Estado</th>
+                        <th>Observaciones</th>
+                        <th>Avance</th>
+                        <th>Fecha de Creación</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody id="commitmentList">
+                    <!-- Aquí se agregan los compromisos -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('commitmentForm');
+        const commitmentList = document.getElementById('commitmentList');
+
+        const STORAGE_KEY = 'commitments';
+        const ADMIN_PASSWORD = 'geo2026';
+
+        let isAdminView = false;
+
+        const userId = getOrCreateUserId();
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadCommitments();
+        });
+
+        function getOrCreateUserId() {
+            let id = localStorage.getItem('userId');
+
+            if (!id) {
+                id = `user-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+                localStorage.setItem('userId', id);
+            }
+
+            return id;
+        }
+
+        function getAllCommitments() {
+            const data = localStorage.getItem(STORAGE_KEY);
+            return data ? JSON.parse(data) : [];
+        }
+
+        function saveAllCommitments(commitments) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(commitments));
+        }
+
+        form.addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            const commitments = getAllCommitments();
+
+            const newCommitment = {
+                id: Date.now().toString(),
+                leaderName: document.getElementById('leaderName').value.trim(),
+                leaderPhone: document.getElementById('leaderPhone').value.trim(),
+                municipality: document.getElementById('municipality').value.trim(),
+                commitment: document.getElementById('commitment').value.trim(),
+                responsible: document.getElementById('responsible').value.trim(),
+                responsibleEmail: document.getElementById('responsibleEmail').value.trim(),
+                observation: document.getElementById('observation').value.trim(),
+                avanceCompromiso: '',
+                state: 'Activo',
+                creationDate: new Date().toISOString(),
+                userId: userId
+            };
+
+            commitments.push(newCommitment);
+            saveAllCommitments(commitments);
+
+            alert('Compromiso guardado correctamente.');
+            form.reset();
+            loadCommitments();
+        });
+
+        function loadCommitments() {
+            let commitments = getAllCommitments();
+
+            commitments = commitments.map(commitment => {
+                if (commitment.state !== 'Cumplido') {
+                    commitment.state = calculateState(commitment.creationDate);
+                }
+                return commitment;
+            });
+
+            saveAllCommitments(commitments);
+
+            let filteredCommitments = commitments;
+
+            if (!isAdminView) {
+                filteredCommitments = commitments.filter(commitment => commitment.userId === userId);
+            }
+
+            commitmentList.innerHTML = '';
+
+            if (filteredCommitments.length === 0) {
+                commitmentList.innerHTML = `
+                    <tr>
+                        <td colspan="11" class="text-center">No hay compromisos registrados.</td>
+                    </tr>
+                `;
+                return;
+            }
+
+            filteredCommitments.forEach(addCommitmentToTable);
+        }
+
+        function calculateState(creationDate) {
+            const created = new Date(creationDate);
+            const today = new Date();
+
+            const diffTime = today - created;
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays > 30) {
+                return 'Vencido';
+            }
+
+            if (diffDays > 15) {
+                return 'Pendiente';
+            }
+
+            return 'Activo';
+        }
+
+        document.getElementById('normalViewButton').addEventListener('click', () => {
+            isAdminView = false;
+            loadCommitments();
+        });
+
+        document.getElementById('adminViewButton').addEventListener('click', () => {
+            const password = prompt('Ingrese la contraseña de administrador:');
+
+            if (password === ADMIN_PASSWORD) {
+                isAdminView = true;
+                loadCommitments();
+            } else {
+                alert('Contraseña incorrecta.');
+            }
+        });
+
+        function getStateClass(state) {
+            switch (state) {
+                case 'Activo':
+                    return 'estado-activo';
+                case 'Pendiente':
+                    return 'estado-pendiente';
+                case 'Vencido':
+                    return 'estado-vencido';
+                case 'Cumplido':
+                    return 'estado-cumplido';
+                default:
+                    return '';
+            }
+        }
+
+        function addCommitmentToTable(commitment) {
+            const row = document.createElement('tr');
+
+            row.innerHTML = `
+                <td>${escapeHTML(commitment.leaderName || 'N/A')}</td>
+                <td>${escapeHTML(commitment.leaderPhone || '')}</td>
+                <td>${escapeHTML(commitment.municipality || 'N/A')}</td>
+                <td>${escapeHTML(commitment.commitment || 'N/A')}</td>
+                <td>${escapeHTML(commitment.responsible || 'N/A')}</td>
+                <td>${escapeHTML(commitment.responsibleEmail || 'N/A')}</td>
+                <td>
+                    <span class="${getStateClass(commitment.state)}">
+                        ${commitment.state || 'N/A'}
+                    </span>
+                </td>
+                <td>${escapeHTML(commitment.observation || '')}</td>
+                <td>${escapeHTML(commitment.avanceCompromiso || '')}</td>
+                <td>${commitment.creationDate ? new Date(commitment.creationDate).toLocaleDateString('es-CO') : 'N/A'}</td>
+                <td>
+                    <button class="btn btn-info btn-sm avance-button">Avance</button>
+                    <button class="btn btn-primary btn-sm complete-button">Cumplido</button>
+                    <button class="btn btn-danger btn-sm delete-button">Eliminar</button>
+                </td>
+            `;
+
+            row.querySelector('.avance-button').addEventListener('click', () => addAvance(commitment.id));
+            row.querySelector('.complete-button').addEventListener('click', () => markAsCompleted(commitment.id));
+            row.querySelector('.delete-button').addEventListener('click', () => deleteCommitment(commitment.id));
+
+            commitmentList.appendChild(row);
+        }
+
+        function addAvance(commitmentId) {
+            const avance = prompt('Ingrese el avance del compromiso:');
+
+            if (!avance) {
+                return;
+            }
+
+            const commitments = getAllCommitments();
+
+            const updatedCommitments = commitments.map(commitment => {
+                if (commitment.id === commitmentId) {
+                    commitment.avanceCompromiso = avance;
+                }
+
+                return commitment;
+            });
+
+            saveAllCommitments(updatedCommitments);
+
+            alert('Avance guardado correctamente.');
+            loadCommitments();
+        }
+
+        function markAsCompleted(commitmentId) {
+            const description = prompt('Describe cómo se cumplió este compromiso:');
+
+            if (!description) {
+                return;
+            }
+
+            const commitments = getAllCommitments();
+
+            const updatedCommitments = commitments.map(commitment => {
+                if (commitment.id === commitmentId) {
+                    commitment.state = 'Cumplido';
+                    commitment.observation = description;
+                }
+
+                return commitment;
+            });
+
+            saveAllCommitments(updatedCommitments);
+
+            alert('Compromiso marcado como cumplido.');
+            loadCommitments();
+        }
+
+        function deleteCommitment(commitmentId) {
+            const password = prompt('Ingrese la contraseña para eliminar:');
+
+            if (password !== ADMIN_PASSWORD) {
+                alert('Contraseña incorrecta.');
+                return;
+            }
+
+            const confirmDelete = confirm('¿Está seguro de eliminar este compromiso?');
+
+            if (!confirmDelete) {
+                return;
+            }
+
+            const commitments = getAllCommitments();
+
+            const updatedCommitments = commitments.filter(commitment => commitment.id !== commitmentId);
+
+            saveAllCommitments(updatedCommitments);
+
+            alert('Compromiso eliminado.');
+            loadCommitments();
+        }
+
+        function escapeHTML(text) {
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        document.getElementById('exportButton').addEventListener('click', () => {
+            let commitments = getAllCommitments();
+
+            if (!isAdminView) {
+                commitments = commitments.filter(commitment => commitment.userId === userId);
+            }
+
+            if (commitments.length === 0) {
+                alert('No hay compromisos para exportar.');
+                return;
+            }
+
+            let csv = 'Nombre del Líder,Teléfono del Líder,Municipio,Compromiso,Responsable,Correo Responsable,Estado,Observaciones,Avance,Fecha de Creación\n';
+
+            commitments.forEach(commitment => {
+                csv += [
+                    commitment.leaderName || '',
+                    commitment.leaderPhone || '',
+                    commitment.municipality || '',
+                    commitment.commitment || '',
+                    commitment.responsible || '',
+                    commitment.responsibleEmail || '',
+                    commitment.state || '',
+                    commitment.observation || '',
+                    commitment.avanceCompromiso || '',
+                    commitment.creationDate ? new Date(commitment.creationDate).toLocaleDateString('es-CO') : ''
+                ].map(value => `"${String(value).replace(/"/g, '""')}"`).join(',') + '\n';
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'compromisos.csv';
+            link.click();
+
+            URL.revokeObjectURL(url);
+        });
+    </script>
+</body>
+</html>
