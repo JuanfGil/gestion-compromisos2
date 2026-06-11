@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestión de Compromisos</title>
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
 
     <style>
@@ -120,6 +121,31 @@
         </div>
     </div>
 
+    <!-- Modal para contraseña oculta -->
+    <div class="modal fade" id="passwordModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 id="passwordModalTitle" class="modal-title">Ingrese la contraseña</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <input type="password" id="passwordInput" class="form-control" placeholder="Contraseña">
+                    <div class="form-text">La contraseña se ocultará mientras la digita.</div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="confirmPasswordButton">Aceptar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS necesario para el modal -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+
     <script>
         const form = document.getElementById('commitmentForm');
         const commitmentList = document.getElementById('commitmentList');
@@ -153,6 +179,55 @@
 
         function saveAllCommitments(commitments) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(commitments));
+        }
+
+        function askPassword(title = 'Ingrese la contraseña') {
+            return new Promise((resolve) => {
+                const modalElement = document.getElementById('passwordModal');
+                const passwordInput = document.getElementById('passwordInput');
+                const confirmButton = document.getElementById('confirmPasswordButton');
+                const modalTitle = document.getElementById('passwordModalTitle');
+
+                modalTitle.textContent = title;
+                passwordInput.value = '';
+
+                const modal = new bootstrap.Modal(modalElement);
+
+                const cleanEvents = () => {
+                    confirmButton.removeEventListener('click', handleConfirm);
+                    passwordInput.removeEventListener('keydown', handleEnter);
+                    modalElement.removeEventListener('hidden.bs.modal', handleCancel);
+                };
+
+                const handleConfirm = () => {
+                    const password = passwordInput.value;
+                    cleanEvents();
+                    modal.hide();
+                    resolve(password);
+                };
+
+                const handleEnter = (event) => {
+                    if (event.key === 'Enter') {
+                        handleConfirm();
+                    }
+                };
+
+                const handleCancel = () => {
+                    cleanEvents();
+                    resolve(null);
+                };
+
+                confirmButton.addEventListener('click', handleConfirm);
+                passwordInput.addEventListener('keydown', handleEnter);
+
+                modalElement.addEventListener('hidden.bs.modal', handleCancel, { once: true });
+
+                modalElement.addEventListener('shown.bs.modal', () => {
+                    passwordInput.focus();
+                }, { once: true });
+
+                modal.show();
+            });
         }
 
         form.addEventListener('submit', function(event) {
@@ -190,6 +265,7 @@
                 if (commitment.state !== 'Cumplido') {
                     commitment.state = calculateState(commitment.creationDate);
                 }
+
                 return commitment;
             });
 
@@ -238,8 +314,12 @@
             loadCommitments();
         });
 
-        document.getElementById('adminViewButton').addEventListener('click', () => {
-            const password = prompt('Ingrese la contraseña de administrador:');
+        document.getElementById('adminViewButton').addEventListener('click', async () => {
+            const password = await askPassword('Ingrese la contraseña de administrador');
+
+            if (password === null) {
+                return;
+            }
 
             if (password === ADMIN_PASSWORD) {
                 isAdminView = true;
@@ -343,8 +423,12 @@
             loadCommitments();
         }
 
-        function deleteCommitment(commitmentId) {
-            const password = prompt('Ingrese la contraseña para eliminar:');
+        async function deleteCommitment(commitmentId) {
+            const password = await askPassword('Ingrese la contraseña para eliminar');
+
+            if (password === null) {
+                return;
+            }
 
             if (password !== ADMIN_PASSWORD) {
                 alert('Contraseña incorrecta.');
